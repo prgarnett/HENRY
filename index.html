@@ -3,10 +3,718 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HENRY: Early Childhood Excess Weight Gain</title>
+<title>System Map: Early Childhood Excess Weight Gain</title>
+<meta name="description" content="Interactive network visualisation of factors influencing excess weight gain in early childhood. 70 nodes, 443 directed edges, multi-level system map. This System Map was produced by the HENRY project.">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:       #0d1117;
+  --surface:  #161b22;
+  --surface2: #1c2128;
+  --border:   #30363d;
+  --border2:  #21262d;
+  --text:     #e6edf3;
+  --muted:    #8b949e;
+  --accent:   #58a6ff;
+  --r:6px;
+}
+
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;overflow:hidden}
+
+/* ── OUTER SHELL ─────────────────────────────── */
+#shell{display:flex;flex-direction:column;height:100vh}
+
+/* ── TOP BAR ─────────────────────────────────── */
+#topbar{
+  flex-shrink:0;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:0 20px;
+  display:flex;align-items:stretch;gap:0;
+}
+
+/* title block */
+.tb-title{
+  display:flex;flex-direction:column;justify-content:center;
+  padding:10px 20px 10px 0;
+  border-right:1px solid var(--border2);
+  min-width:0;
+}
+.tb-title h1{
+  font-size:14px;font-weight:600;letter-spacing:.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tb-title p{
+  font-size:10px;color:var(--muted);
+  font-family:'IBM Plex Mono',monospace;margin-top:2px;
+  white-space:nowrap;
+}
+
+/* view switcher */
+.tb-views{display:flex;align-items:center;gap:0;padding:0 20px;border-right:1px solid var(--border2);}
+.vbtn{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;
+  letter-spacing:.04em;padding:6px 14px;cursor:pointer;
+  background:transparent;color:var(--muted);border:none;
+  border-radius:var(--r);transition:color .15s,background .15s;
+  position:relative;
+}
+.vbtn:hover{color:var(--text);}
+.vbtn.active{color:var(--accent);background:rgba(88,166,255,.08);}
+.vbtn.active::after{
+  content:'';position:absolute;bottom:-1px;left:14px;right:14px;
+  height:2px;background:var(--accent);border-radius:2px 2px 0 0;
+}
+
+/* right spacer for controls injected by each view */
+#tb-controls{display:flex;align-items:center;gap:10px;padding:0 0 0 20px;flex:1;flex-wrap:wrap;}
+
+/* ── ABOUT STRIP ─────────────────────────────── */
+#about-strip{
+  flex-shrink:0;
+  background:var(--surface2);
+  border-bottom:1px solid var(--border2);
+  padding:7px 20px;
+  display:flex;align-items:center;gap:20px;flex-wrap:wrap;
+}
+.as-stat{display:flex;align-items:baseline;gap:5px;}
+.as-stat .num{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:var(--accent);}
+.as-stat .lbl{font-size:10px;color:var(--muted);}
+.as-divider{width:1px;height:24px;background:var(--border2);flex-shrink:0;}
+.as-text{font-size:11px;color:var(--muted);line-height:1.5;font-style:italic;flex:1;min-width:200px;}
+.as-badge{
+  font-family:'IBM Plex Mono',monospace;font-size:9px;
+  background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.25);
+  color:var(--accent);border-radius:99px;padding:2px 8px;white-space:nowrap;
+}
+
+/* ── VIZ AREA ────────────────────────────────── */
+#viz-area{flex:1;position:relative;overflow:hidden;}
+
+.viz-panel{
+  position:absolute;inset:0;
+  display:none;flex-direction:column;
+}
+.viz-panel.active{display:flex;}
+
+/* canvas inside each panel */
+.vc{flex:1;position:relative;overflow:hidden;}
+.vc svg{width:100%;height:100%;cursor:grab;}
+.vc svg:active{cursor:grabbing;}
+
+/* ── SHARED EDGE / NODE STYLES ───────────────── */
+.edge{fill:none;stroke-opacity:.12;transition:stroke-opacity .1s;}
+.edge.hi {stroke-opacity:.88!important;stroke-width:1.8!important;}
+.edge.dim{stroke-opacity:.015!important;}
+
+.node-g{cursor:pointer;}
+.node-g circle{stroke-width:1.5;}
+.node-g.dim    circle{opacity:.1;}
+.node-g.dim    text  {opacity:.06;}
+.node-g.hi     circle{stroke:#fff!important;stroke-width:2.5;}
+.node-g.search-hit circle{stroke:#ffd700!important;stroke-width:3;}
+.node-label{font-family:'IBM Plex Sans',sans-serif;font-size:10.5px;fill:var(--text);pointer-events:none;dominant-baseline:central;}
+
+/* column-view specifics */
+.col-header{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;
+  letter-spacing:.06em;text-transform:uppercase;fill:#8b949e;text-anchor:middle;}
+.col-count {font-family:'IBM Plex Mono',monospace;font-size:9px;fill:#3d444d;text-anchor:middle;}
+.col-line  {stroke:#21262d;stroke-width:1;stroke-dasharray:3 5;}
+
+/* force-view specifics */
+.order-ring-label{font-family:'IBM Plex Mono',monospace;font-size:9px;fill:#3d444d;pointer-events:none;}
+
+/* ── TOOLTIP ────────────────────────────────── */
+.tt{
+  position:absolute;pointer-events:none;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:9px 12px;max-width:250px;
+  font-size:11px;opacity:0;transition:opacity .12s;
+  box-shadow:0 4px 18px rgba(0,0,0,.55);z-index:20;line-height:1.5;
+}
+.tt .tt-name{font-size:12px;font-weight:600;margin-bottom:5px;line-height:1.3;}
+.tt .tt-row {display:flex;gap:6px;margin-top:2px;}
+.tt .tt-k   {color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:10px;min-width:52px;flex-shrink:0;}
+.tt .dot    {width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle;flex-shrink:0;margin-top:2px;}
+
+/* ── LEGEND ─────────────────────────────────── */
+.legend{
+  position:absolute;bottom:14px;left:14px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:10px 13px;
+  font-size:10.5px;max-height:calc(100% - 40px);overflow-y:auto;scrollbar-width:thin;
+  z-index:10;
+}
+.legend .leg-title{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:7px;}
+.leg-item{display:flex;align-items:center;gap:7px;margin-bottom:4px;cursor:pointer;user-select:none;transition:opacity .2s;}
+.leg-item.off{opacity:.3;}
+.leg-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.leg-cnt{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);margin-left:auto;padding-left:8px;}
+
+/* ── BADGE ───────────────────────────────────── */
+.badge{
+  position:absolute;top:12px;right:14px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:8px 12px;font-size:11px;max-width:270px;
+  opacity:0;pointer-events:none;transition:opacity .2s;z-index:10;
+}
+.badge.on{opacity:1;}
+.badge .b-name{font-weight:600;font-size:12px;margin-bottom:4px;line-height:1.3;}
+.badge .b-meta{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);line-height:1.8;}
+
+/* ── HINT ────────────────────────────────────── */
+.hint{
+  position:absolute;bottom:14px;right:14px;
+  font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d444d;
+  text-align:right;pointer-events:none;line-height:1.9;z-index:10;
+}
+
+/* ── TOPBAR CONTROLS (injected by each view) ─ */
+.ctrl-search{position:relative;}
+.ctrl-search input{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--r);
+  color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;
+  padding:4px 9px 4px 26px;width:180px;outline:none;transition:border-color .2s;
+}
+.ctrl-search input:focus{border-color:var(--accent);}
+.ctrl-search .ic{position:absolute;left:8px;top:50%;transform:translateY(-50%);opacity:.4;pointer-events:none;}
+
+.ctrl-slider{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+.ctrl-slider input[type=range]{width:76px;accent-color:var(--accent);cursor:pointer;}
+
+.ctrl-layout{display:flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;}
+.ctrl-layout button{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;
+  padding:4px 11px;background:transparent;color:var(--muted);
+  border:none;cursor:pointer;transition:background .15s,color .15s;
+}
+.ctrl-layout button.active{background:var(--border);color:var(--text);}
+
+/* ── FOOTER ─────────────────────────────────── */
+#footer{
+  flex-shrink:0;
+  background:var(--surface2);border-top:1px solid var(--border2);
+  padding:5px 20px;
+  display:flex;align-items:center;justify-content:space-between;
+  font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d444d;
+}
+#footer a{color:#484f58;text-decoration:none;}
+#footer a:hover{color:var(--muted);}
+</style>
 </head>
 <body>
-  <h1>HENRY: Early Childhood Excess Weight Gain</h1>
-  <p>Place holder for HENRY network visualisations.</p>
+<div id="shell">
+
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <div class="tb-title">
+      <h1>System Map: Early Childhood Excess Weight Gain</h1>
+      <p>70 nodes &nbsp;·&nbsp; 443 directed edges &nbsp;·&nbsp; multi-level system map</p>
+    </div>
+    <div class="tb-views">
+      <button class="vbtn active" data-view="col">Column</button>
+      <button class="vbtn"        data-view="force">Force</button>
+    </div>
+    <div id="tb-controls">
+      <!-- populated by the active view -->
+    </div>
+  </div>
+
+  <!-- ABOUT STRIP -->
+  <div id="about-strip">
+    <div class="as-stat"><span class="num">70</span><span class="lbl">factors</span></div>
+    <div class="as-divider"></div>
+    <div class="as-stat"><span class="num">443</span><span class="lbl">directed edges</span></div>
+    <div class="as-divider"></div>
+    <div class="as-stat"><span class="num">6</span><span class="lbl">scale levels</span></div>
+    <div class="as-divider"></div>
+    <div class="as-stat"><span class="num">12</span><span class="lbl">categories</span></div>
+    <div class="as-divider"></div>
+    <p class="as-text">
+      A multi-level system map of factors that influence excess weight gain in children aged 0–5.
+      Nodes span scales from global drivers to individual child physiology.
+      <strong>Column view</strong> orders by scale level; <strong>Force view</strong> reveals network structure.
+    </p>
+    <span class="as-badge">ActEarly Research</span>
+  </div>
+
+  <!-- VIZ AREA -->
+  <div id="viz-area">
+
+    <!-- ═══════════════════════════════════════════
+         PANEL 1: COLUMN VIEW (default)
+    ═══════════════════════════════════════════ -->
+    <div class="viz-panel active" id="panel-col">
+      <div class="vc" id="col-canvas">
+        <svg id="col-svg"><g id="col-root"></g></svg>
+        <div class="tt"     id="col-tt"></div>
+        <div class="badge"  id="col-badge"><div class="b-name"></div><div class="b-meta"></div></div>
+        <div class="legend" id="col-legend"><div class="leg-title">Category (colour)</div></div>
+        <div class="hint">scroll to zoom · drag to pan<br>click node to explore · dbl-click to reset</div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         PANEL 2: FORCE VIEW
+    ═══════════════════════════════════════════ -->
+    <div class="viz-panel" id="panel-force">
+      <div class="vc" id="force-canvas">
+        <svg id="force-svg"><g id="force-root"></g></svg>
+        <div class="tt"     id="force-tt"></div>
+        <div class="badge"  id="force-badge"><div class="b-name"></div><div class="b-meta"></div></div>
+        <div class="legend" id="force-legend"><div class="leg-title">Scale level (colour)</div></div>
+        <div class="hint">scroll to zoom · drag to pan<br>click node to explore · dbl-click to reset</div>
+      </div>
+    </div>
+
+  </div><!-- /viz-area -->
+
+  <!-- FOOTER -->
+  <div id="footer">
+    <span>Column view: macro → micro &nbsp;·&nbsp; Colour = category &nbsp;·&nbsp; Node size = degree</span>
+    <span>Built with <a href="https://d3js.org" target="_blank">D3.js v7</a> &nbsp;·&nbsp; Data: ActEarly Research Programme</span>
+  </div>
+
+</div><!-- /shell -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  SHARED DATA
+// ═══════════════════════════════════════════════════════════════
+const RAW_NODES=[{"id":0,"label":"Access/cost/quality of childcare","group":"Local","category":"Early Years Services and Provision"},{"id":1,"label":"Access to cooking facilities","group":"Parent/carer","category":"Income/Resources"},{"id":2,"label":"Access to safe play areas","group":"Local","category":"Amenities and Physical Environment"},{"id":3,"label":"Activity levels","group":"Child","category":"Individual behaviours/preferences"},{"id":4,"label":"Additional needs provision","group":"Local","category":"Early Years Services and Provision"},{"id":5,"label":"Advertising/marketing of food","group":"Global","category":""},{"id":6,"label":"Parent/carer mental ill health","group":"Parent/carer","category":"Parent/carer mental health"},{"id":7,"label":"Availability and affordability of healthy food","group":"National","category":"Food manufactures/retailers"},{"id":8,"label":"Availability of culturally appropriate food","group":"Local","category":"Amenities and Physical Environment"},{"id":9,"label":"Busy lives/multiple responsibilities","group":"Parent/carer","category":"Life Pressures"},{"id":10,"label":"Childcare food provision (nutritional standards)","group":"Local","category":"Early Years Services and Provision"},{"id":11,"label":"Childcare policies (subsidised hours)","group":"National","category":"Government policies/funding"},{"id":12,"label":"Commissioning, delivery and access of prevention services","group":"Local","category":"Early Years Services and Provision"},{"id":13,"label":"Cooking knowledge/skills","group":"Parent/carer","category":"Family eating behaviours"},{"id":14,"label":"Provision/support from ante/postnatal services","group":"Local","category":""},{"id":15,"label":"Infant feeding methods","group":"Parent/carer","category":"Pregnancy/post-natal"},{"id":16,"label":"Guilt/perceived stigma about child's eating","group":"Parent/carer","category":"Parent/carer mental health"},{"id":17,"label":"Impact of work","group":"Parent/carer","category":"Life Pressures"},{"id":18,"label":"Income/budget/poverty","group":"Parent/carer","category":"Income/Resources"},{"id":19,"label":"Lone parenting/co-parenting","group":"Parent/carer","category":"Life Pressures"},{"id":20,"label":"Parenting skills and style","group":"Parent/carer","category":""},{"id":21,"label":"Staff training on Healthy Start and working with parents","group":"Local","category":"Early Years Services and Provision"},{"id":22,"label":"Parent/carer resilience","group":"Parent/carer","category":"Parent/carer mental health"},{"id":23,"label":"Family food practices and culture","group":"Parent/carer","category":"Family eating behaviours"},{"id":24,"label":"Staff recruitment and retention within early years services","group":"Local","category":"Early Years Services and Provision"},{"id":25,"label":"Sugar tax","group":"National","category":"Government policies/funding"},{"id":26,"label":"Support networks","group":"Wider family/social networks","category":""},{"id":27,"label":"Welfare and other financial support for families","group":"National","category":"Government policies/funding"},{"id":28,"label":"Long term effects of covid lockdown policies","group":"National","category":"Government policies/funding"},{"id":29,"label":"Access to food retailers","group":"Local","category":"Amenities and Physical Environment"},{"id":30,"label":"Food insecurity","group":"Parent/carer","category":"Income/Resources"},{"id":31,"label":"Social media","group":"National","category":""},{"id":32,"label":"Political events","group":"Global","category":""},{"id":33,"label":"Provision of affordable and accessible leisure activities","group":"Local","category":"Amenities and Physical Environment"},{"id":34,"label":"Access and cost of transport","group":"Local","category":"Amenities and Physical Environment"},{"id":35,"label":"Early years child measurement programmes","group":"National","category":"Government policies/funding"},{"id":36,"label":"Town planning and opportunity for active travel","group":"Local","category":"Amenities and Physical Environment"},{"id":37,"label":"Wider family","group":"Wider family/social networks","category":""},{"id":38,"label":"Biology","group":"Child","category":"Physiology"},{"id":39,"label":"Use of pacifiers","group":"Parent/carer","category":"Family eating behaviours"},{"id":40,"label":"Disposable income and spending priorities","group":"Parent/carer","category":"Income/Resources"},{"id":41,"label":"Language barriers","group":"Parent/carer","category":"Life Pressures"},{"id":42,"label":"Parent/carer physical health","group":"Parent/carer","category":"Life Pressures"},{"id":43,"label":"Quality of food provided by food banks","group":"Local","category":"Amenities and Physical Environment"},{"id":44,"label":"Perception of healthy weight","group":"Parent/carer","category":"Family eating behaviours"},{"id":45,"label":"Birth weight","group":"Child","category":"Physiology"},{"id":46,"label":"Adverse childhood experiences","group":"Child","category":"Specific needs"},{"id":47,"label":"Child's health","group":"Child","category":"Physiology"},{"id":48,"label":"Neurodiversity and cognitive conditions","group":"Child","category":"Specific needs"},{"id":49,"label":"Fussiness/selective eating","group":"Child","category":"Individual behaviours/preferences"},{"id":50,"label":"Food allergies/intolerances","group":"Child","category":"Specific needs"},{"id":51,"label":"Sleep behaviours","group":"Child","category":"Individual behaviours/preferences"},{"id":52,"label":"Managing needs of different siblings","group":"Parent/carer","category":"Life Pressures"},{"id":53,"label":"Environmental events","group":"Global","category":""},{"id":54,"label":"Climate change","group":"Global","category":""},{"id":55,"label":"Farming practices","group":"Global","category":""},{"id":56,"label":"Culturally appropriate services","group":"Local","category":"Early Years Services and Provision"},{"id":57,"label":"Provision of physical activity in early years settings","group":"Local","category":"Early Years Services and Provision"},{"id":58,"label":"Education and employment status","group":"Parent/carer","category":"Income/Resources"},{"id":59,"label":"Pregnancy & birth complexity","group":"Parent/carer","category":"Pregnancy/post-natal"},{"id":60,"label":"Access to affordable dental care","group":"National","category":"Government policies/funding"},{"id":61,"label":"Screen time","group":"Child","category":"Individual behaviours/preferences"},{"id":62,"label":"Child's food preferences","group":"Child","category":"Individual behaviours/preferences"},{"id":63,"label":"Inhibitory control/self regulation/temperament","group":"Child","category":"Individual behaviours/preferences"},{"id":64,"label":"Diet quality","group":"Child","category":"Individual behaviours/preferences"},{"id":65,"label":"Maternal behaviours during pregnancy","group":"Parent/carer","category":"Pregnancy/post-natal"},{"id":66,"label":"Size of household","group":"Parent/carer","category":"Life Pressures"},{"id":67,"label":"Use and intensity of informal and formal childcare","group":"Parent/carer","category":"Income/Resources"},{"id":68,"label":"Urban/Rural Geographical Setting","group":"Local","category":"Amenities and Physical Environment"},{"id":69,"label":"Weaning","group":"Parent/carer","category":"Pregnancy/post-natal"}]
+
+const RAW_EDGES=[{"source":0,"target":7},{"source":0,"target":10},{"source":0,"target":15},{"source":0,"target":18},{"source":0,"target":26},{"source":1,"target":13},{"source":1,"target":15},{"source":1,"target":37},{"source":1,"target":64},{"source":1,"target":65},{"source":1,"target":69},{"source":2,"target":3},{"source":2,"target":6},{"source":2,"target":42},{"source":2,"target":56},{"source":2,"target":57},{"source":3,"target":47},{"source":4,"target":6},{"source":5,"target":13},{"source":5,"target":15},{"source":5,"target":23},{"source":5,"target":62},{"source":5,"target":63},{"source":5,"target":64},{"source":5,"target":69},{"source":6,"target":2},{"source":6,"target":14},{"source":6,"target":15},{"source":6,"target":20},{"source":6,"target":22},{"source":6,"target":27},{"source":7,"target":8},{"source":7,"target":9},{"source":7,"target":10},{"source":7,"target":13},{"source":7,"target":15},{"source":7,"target":17},{"source":7,"target":22},{"source":7,"target":26},{"source":7,"target":27},{"source":7,"target":30},{"source":7,"target":34},{"source":7,"target":37},{"source":7,"target":62},{"source":7,"target":64},{"source":7,"target":65},{"source":7,"target":69},{"source":8,"target":15},{"source":8,"target":23},{"source":8,"target":37},{"source":8,"target":62},{"source":8,"target":69},{"source":9,"target":3},{"source":9,"target":7},{"source":9,"target":14},{"source":9,"target":15},{"source":9,"target":16},{"source":9,"target":29},{"source":9,"target":37},{"source":9,"target":64},{"source":9,"target":65},{"source":9,"target":67},{"source":9,"target":69},{"source":10,"target":15},{"source":10,"target":17},{"source":10,"target":62},{"source":10,"target":64},{"source":10,"target":69},{"source":11,"target":0},{"source":11,"target":2},{"source":11,"target":3},{"source":11,"target":4},{"source":11,"target":10},{"source":11,"target":18},{"source":11,"target":19},{"source":11,"target":21},{"source":11,"target":24},{"source":11,"target":40},{"source":11,"target":67},{"source":12,"target":0},{"source":12,"target":3},{"source":12,"target":13},{"source":12,"target":14},{"source":12,"target":15},{"source":12,"target":16},{"source":12,"target":20},{"source":12,"target":21},{"source":12,"target":33},{"source":12,"target":47},{"source":12,"target":62},{"source":12,"target":63},{"source":12,"target":64},{"source":12,"target":65},{"source":12,"target":69},{"source":13,"target":15},{"source":13,"target":23},{"source":13,"target":37},{"source":13,"target":44},{"source":13,"target":62},{"source":14,"target":6},{"source":14,"target":15},{"source":14,"target":16},{"source":14,"target":20},{"source":14,"target":22},{"source":14,"target":39},{"source":14,"target":42},{"source":14,"target":45},{"source":14,"target":47},{"source":14,"target":51},{"source":14,"target":59},{"source":14,"target":65},{"source":14,"target":69},{"source":15,"target":14},{"source":15,"target":49},{"source":15,"target":62},{"source":15,"target":63},{"source":16,"target":6},{"source":16,"target":15},{"source":16,"target":44},{"source":17,"target":0},{"source":17,"target":4},{"source":17,"target":9},{"source":17,"target":15},{"source":17,"target":18},{"source":17,"target":27},{"source":17,"target":37},{"source":17,"target":40},{"source":18,"target":0},{"source":18,"target":1},{"source":18,"target":2},{"source":18,"target":3},{"source":18,"target":6},{"source":18,"target":13},{"source":18,"target":15},{"source":18,"target":16},{"source":18,"target":27},{"source":18,"target":30},{"source":18,"target":40},{"source":18,"target":60},{"source":18,"target":61},{"source":18,"target":64},{"source":18,"target":67},{"source":19,"target":0},{"source":19,"target":9},{"source":19,"target":17},{"source":19,"target":18},{"source":19,"target":20},{"source":19,"target":26},{"source":19,"target":40},{"source":19,"target":66},{"source":19,"target":67},{"source":20,"target":3},{"source":20,"target":15},{"source":20,"target":16},{"source":20,"target":22},{"source":20,"target":23},{"source":20,"target":37},{"source":20,"target":39},{"source":20,"target":49},{"source":20,"target":51},{"source":20,"target":61},{"source":20,"target":62},{"source":20,"target":63},{"source":20,"target":69},{"source":21,"target":3},{"source":21,"target":13},{"source":21,"target":14},{"source":21,"target":15},{"source":21,"target":20},{"source":21,"target":22},{"source":21,"target":23},{"source":21,"target":26},{"source":21,"target":37},{"source":21,"target":44},{"source":21,"target":47},{"source":21,"target":49},{"source":21,"target":51},{"source":21,"target":52},{"source":21,"target":61},{"source":21,"target":62},{"source":21,"target":63},{"source":21,"target":64},{"source":21,"target":69},{"source":22,"target":16},{"source":23,"target":3},{"source":23,"target":15},{"source":23,"target":37},{"source":23,"target":49},{"source":23,"target":62},{"source":23,"target":63},{"source":24,"target":0},{"source":24,"target":4},{"source":24,"target":10},{"source":24,"target":20},{"source":24,"target":21},{"source":25,"target":15},{"source":25,"target":23},{"source":25,"target":64},{"source":26,"target":4},{"source":26,"target":6},{"source":26,"target":13},{"source":26,"target":14},{"source":26,"target":20},{"source":26,"target":22},{"source":26,"target":37},{"source":26,"target":56},{"source":26,"target":67},{"source":27,"target":0},{"source":27,"target":1},{"source":27,"target":4},{"source":27,"target":6},{"source":27,"target":7},{"source":27,"target":11},{"source":27,"target":15},{"source":27,"target":18},{"source":27,"target":22},{"source":27,"target":29},{"source":27,"target":30},{"source":27,"target":33},{"source":27,"target":34},{"source":27,"target":60},{"source":27,"target":67},{"source":28,"target":62},{"source":29,"target":7},{"source":29,"target":8},{"source":29,"target":15},{"source":29,"target":62},{"source":29,"target":64},{"source":30,"target":15},{"source":30,"target":16},{"source":30,"target":26},{"source":30,"target":27},{"source":30,"target":40},{"source":30,"target":45},{"source":30,"target":64},{"source":31,"target":5},{"source":31,"target":15},{"source":31,"target":16},{"source":31,"target":20},{"source":31,"target":44},{"source":31,"target":69},{"source":32,"target":0},{"source":32,"target":4},{"source":32,"target":7},{"source":32,"target":8},{"source":32,"target":18},{"source":32,"target":25},{"source":32,"target":27},{"source":32,"target":28},{"source":32,"target":30},{"source":32,"target":36},{"source":32,"target":55},{"source":32,"target":58},{"source":32,"target":60},{"source":33,"target":2},{"source":33,"target":3},{"source":33,"target":12},{"source":33,"target":27},{"source":33,"target":42},{"source":33,"target":47},{"source":33,"target":57},{"source":34,"target":0},{"source":34,"target":2},{"source":34,"target":14},{"source":34,"target":29},{"source":35,"target":3},{"source":35,"target":11},{"source":35,"target":12},{"source":35,"target":13},{"source":35,"target":15},{"source":35,"target":16},{"source":35,"target":20},{"source":35,"target":22},{"source":35,"target":26},{"source":35,"target":42},{"source":35,"target":44},{"source":35,"target":47},{"source":35,"target":49},{"source":35,"target":62},{"source":35,"target":64},{"source":35,"target":65},{"source":35,"target":69},{"source":36,"target":2},{"source":36,"target":3},{"source":36,"target":7},{"source":36,"target":29},{"source":36,"target":33},{"source":36,"target":34},{"source":36,"target":57},{"source":37,"target":13},{"source":37,"target":15},{"source":37,"target":22},{"source":37,"target":23},{"source":37,"target":49},{"source":37,"target":62},{"source":37,"target":64},{"source":37,"target":69},{"source":38,"target":45},{"source":38,"target":47},{"source":38,"target":48},{"source":38,"target":50},{"source":38,"target":62},{"source":38,"target":63},{"source":38,"target":65},{"source":38,"target":69},{"source":39,"target":14},{"source":39,"target":69},{"source":40,"target":14},{"source":40,"target":15},{"source":40,"target":18},{"source":40,"target":29},{"source":40,"target":30},{"source":40,"target":64},{"source":40,"target":65},{"source":40,"target":67},{"source":40,"target":69},{"source":41,"target":4},{"source":41,"target":14},{"source":41,"target":26},{"source":41,"target":60},{"source":41,"target":67},{"source":42,"target":3},{"source":42,"target":14},{"source":42,"target":15},{"source":42,"target":37},{"source":42,"target":47},{"source":42,"target":59},{"source":42,"target":67},{"source":43,"target":1},{"source":43,"target":7},{"source":43,"target":8},{"source":43,"target":64},{"source":43,"target":65},{"source":43,"target":69},{"source":44,"target":13},{"source":44,"target":15},{"source":44,"target":16},{"source":44,"target":23},{"source":44,"target":64},{"source":44,"target":65},{"source":44,"target":69},{"source":45,"target":15},{"source":45,"target":47},{"source":46,"target":6},{"source":46,"target":22},{"source":46,"target":47},{"source":46,"target":51},{"source":47,"target":14},{"source":47,"target":51},{"source":47,"target":52},{"source":47,"target":67},{"source":47,"target":69},{"source":48,"target":15},{"source":48,"target":49},{"source":48,"target":62},{"source":48,"target":63},{"source":48,"target":69},{"source":50,"target":6},{"source":50,"target":10},{"source":50,"target":15},{"source":50,"target":37},{"source":50,"target":47},{"source":50,"target":62},{"source":50,"target":64},{"source":50,"target":69},{"source":51,"target":3},{"source":51,"target":63},{"source":51,"target":69},{"source":52,"target":6},{"source":52,"target":9},{"source":52,"target":14},{"source":52,"target":15},{"source":52,"target":37},{"source":52,"target":65},{"source":52,"target":67},{"source":52,"target":69},{"source":53,"target":7},{"source":53,"target":55},{"source":54,"target":7},{"source":54,"target":55},{"source":55,"target":7},{"source":56,"target":2},{"source":56,"target":13},{"source":56,"target":22},{"source":56,"target":26},{"source":57,"target":3},{"source":57,"target":47},{"source":57,"target":51},{"source":57,"target":61},{"source":58,"target":0},{"source":58,"target":18},{"source":58,"target":27},{"source":58,"target":40},{"source":58,"target":67},{"source":59,"target":14},{"source":59,"target":15},{"source":59,"target":45},{"source":59,"target":65},{"source":60,"target":47},{"source":61,"target":3},{"source":61,"target":47},{"source":61,"target":51},{"source":61,"target":62},{"source":61,"target":63},{"source":62,"target":47},{"source":62,"target":49},{"source":62,"target":64},{"source":62,"target":69},{"source":63,"target":39},{"source":63,"target":49},{"source":63,"target":69},{"source":64,"target":47},{"source":65,"target":42},{"source":65,"target":45},{"source":66,"target":14},{"source":66,"target":23},{"source":66,"target":37},{"source":66,"target":64},{"source":66,"target":65},{"source":66,"target":67},{"source":66,"target":69},{"source":67,"target":3},{"source":67,"target":15},{"source":67,"target":62},{"source":67,"target":69},{"source":68,"target":0},{"source":68,"target":2},{"source":68,"target":5},{"source":68,"target":7},{"source":68,"target":8},{"source":68,"target":29},{"source":68,"target":33},{"source":68,"target":34},{"source":68,"target":36},{"source":68,"target":53},{"source":68,"target":56},{"source":69,"target":15},{"source":69,"target":37},{"source":69,"target":39},{"source":69,"target":47},{"source":69,"target":49},{"source":69,"target":51},{"source":69,"target":63}]
+
+// Shared adjacency
+const SHARED = (() => {
+  const nb = new Map(RAW_NODES.map(n=>[n.id,new Set()]));
+  const ind = new Map(RAW_NODES.map(n=>[n.id,0]));
+  const outd= new Map(RAW_NODES.map(n=>[n.id,0]));
+  RAW_EDGES.forEach(e=>{
+    nb.get(e.source).add(e.target);
+    nb.get(e.target).add(e.source);
+    outd.set(e.source,outd.get(e.source)+1);
+    ind.set(e.target, ind.get(e.target)+1);
+  });
+  return {nb,ind,outd};
+})();
+
+// ═══════════════════════════════════════════════════════════════
+//  VIEW SWITCHER
+// ═══════════════════════════════════════════════════════════════
+const tbControls = document.getElementById('tb-controls');
+const footerEl   = document.getElementById('footer');
+let forceInited  = false;
+
+const FOOTER_TEXT = {
+  col:   'Column view: macro (Global) → micro (Child)  ·  Colour = category  ·  Node size = degree',
+  force: 'Force view: position = network centrality  ·  Colour = scale level  ·  Node size = degree'
+};
+
+document.querySelectorAll('.vbtn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const v = btn.dataset.view;
+    document.querySelectorAll('.vbtn').forEach(b=>b.classList.toggle('active',b===btn));
+    document.querySelectorAll('.viz-panel').forEach(p=>p.classList.toggle('active',p.id===`panel-${v}`));
+    tbControls.innerHTML='';
+    footerEl.querySelector('span').textContent = FOOTER_TEXT[v];
+    if(v==='col')   COL_VIEW.mountControls();
+    if(v==='force'){ if(!forceInited){ FORCE_VIEW.init(); forceInited=true; } FORCE_VIEW.mountControls(); }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  COLUMN VIEW
+// ═══════════════════════════════════════════════════════════════
+const COL_VIEW = (() => {
+
+  const CAT_COLORS={
+    "Early Years Services and Provision":"#58a6ff",
+    "Amenities and Physical Environment":"#3fb950",
+    "Individual behaviours/preferences": "#f78166",
+    "Life Pressures":                    "#ffa657",
+    "Income/Resources":                  "#d2a8ff",
+    "Government policies/funding":       "#79c0ff",
+    "Family eating behaviours":          "#ff7b72",
+    "Parent/carer mental health":        "#56d364",
+    "Pregnancy/post-natal":              "#e3b341",
+    "Physiology":                        "#f0883e",
+    "Specific needs":                    "#bc8cff",
+    "Food manufactures/retailers":       "#63d8c4",
+    "":                                  "#484f58"
+  };
+  const catLabel = c => c||"Unclassified";
+
+  const COL_ORDER=["Global","National","Wider family/social networks","Local","Parent/carer","Child"];
+  const NODE_R=6, ROW_GAP=30, COL_HEAD=72, PAD_TB=20, PAD_LR=110;
+
+  const byGroup = new Map(COL_ORDER.map(g=>[g,[]]));
+  RAW_NODES.forEach(n=>byGroup.get(n.group)?.push(n));
+  byGroup.forEach(arr=>arr.sort((a,b)=>a.category!==b.category?a.category.localeCompare(b.category):a.label.localeCompare(b.label)));
+  const maxRows = Math.max(...COL_ORDER.map(g=>byGroup.get(g).length));
+
+  const nodePos = new Map();
+
+  function computePositions(W){
+    const colSpacing=(W-PAD_LR*2)/(COL_ORDER.length-1);
+    COL_ORDER.forEach((g,ci)=>{
+      const cx=PAD_LR+ci*colSpacing;
+      const nodes=byGroup.get(g);
+      const startY=COL_HEAD+PAD_TB+(maxRows*ROW_GAP-((nodes.length-1)*ROW_GAP))/2;
+      nodes.forEach((n,ri)=>nodePos.set(n.id,{x:cx,y:startY+ri*ROW_GAP,col:ci}));
+    });
+  }
+
+  const svgSel=d3.select('#col-svg');
+  const root  =d3.select('#col-root');
+  const edgeG =root.append('g');
+  const nodeG =root.append('g');
+  const colG  =root.append('g');
+
+  const zoom=d3.zoom().scaleExtent([0.2,6]).on('zoom',e=>root.attr('transform',e.transform));
+  svgSel.call(zoom);
+  svgSel.on('dblclick.zoom',null).on('dblclick',()=>select(null));
+
+  function edgePath(sid,tid){
+    const s=nodePos.get(sid),t=nodePos.get(tid);
+    if(!s||!t)return'';
+    if(s.col===t.col){const side=(s.col<COL_ORDER.length/2?-45:45);return`M${s.x},${s.y} C${s.x+side},${s.y} ${t.x+side},${t.y} ${t.x},${t.y}`;}
+    const mx=(s.x+t.x)/2;
+    return`M${s.x},${s.y} C${mx},${s.y} ${mx},${t.y} ${t.x},${t.y}`;
+  }
+
+  const edgeSel=edgeG.selectAll('path.edge').data(RAW_EDGES).join('path')
+    .attr('class','edge')
+    .attr('stroke',d=>CAT_COLORS[RAW_NODES[d.source].category]??'#58a6ff')
+    .attr('stroke-width',1);
+
+  const ngSel=nodeG.selectAll('g.node-g').data(RAW_NODES).join('g')
+    .attr('class','node-g')
+    .on('click',(e,d)=>{e.stopPropagation();select(d.id===selNode?null:d.id);})
+    .on('mouseover',showTT).on('mousemove',moveTT).on('mouseout',hideTT);
+
+  ngSel.append('circle')
+    .attr('r',d=>NODE_R+Math.sqrt((SHARED.ind.get(d.id)||0)+(SHARED.outd.get(d.id)||0))*0.65)
+    .attr('fill',d=>CAT_COLORS[d.category]??'#484f58').attr('fill-opacity',0.82)
+    .attr('stroke',d=>CAT_COLORS[d.category]??'#484f58').attr('stroke-opacity',0.5);
+  ngSel.append('text').attr('class','node-label')
+    .text(d=>d.label.length>36?d.label.slice(0,34)+'…':d.label);
+
+  function positionAll(){
+    ngSel.attr('transform',d=>{const p=nodePos.get(d.id);return p?`translate(${p.x},${p.y})`:''});
+    ngSel.select('text')
+      .attr('x',d=>{const p=nodePos.get(d.id);return p&&p.col>=COL_ORDER.length/2?-10:10;})
+      .attr('text-anchor',d=>{const p=nodePos.get(d.id);return p&&p.col>=COL_ORDER.length/2?'end':'start';});
+    edgeSel.attr('d',d=>edgePath(d.source,d.target));
+    // Column headers
+    colG.selectAll('*').remove();
+    const maxY=COL_HEAD+PAD_TB+maxRows*ROW_GAP;
+    COL_ORDER.forEach((g,ci)=>{
+      const s=byGroup.get(g)[0];if(!s)return;
+      const cx=nodePos.get(s.id).x;
+      const cnt=byGroup.get(g).length;
+      const isW=g==='Wider family/social networks';
+      const pw=isW?136:Math.min(g.length*7.5+20,160);
+      colG.append('rect').attr('x',cx-pw/2).attr('y',10).attr('width',pw).attr('height',isW?44:32).attr('rx',4).attr('fill','#161b22').attr('stroke','#21262d');
+      colG.append('line').attr('class','col-line').attr('x1',cx).attr('y1',COL_HEAD-4).attr('x2',cx).attr('y2',maxY+8);
+      if(isW){
+        colG.append('text').attr('class','col-header').attr('x',cx).attr('y',26).text('Wider family /');
+        colG.append('text').attr('class','col-header').attr('x',cx).attr('y',39).text('social networks');
+        colG.append('text').attr('class','col-count').attr('x',cx).attr('y',51).text(`${cnt} nodes`);
+      } else {
+        colG.append('text').attr('class','col-header').attr('x',cx).attr('y',28).text(g);
+        colG.append('text').attr('class','col-count').attr('x',cx).attr('y',40).text(`${cnt} nodes`);
+      }
+    });
+  }
+
+  let selNode=null;
+  let activeCats=new Set(Object.keys(CAT_COLORS));
+  let edgeOp=0.12;
+
+  function applyStyles(){
+    const term=document.getElementById('col-search')?.value.trim().toLowerCase()||'';
+    ngSel
+      .classed('dim',d=>!activeCats.has(d.category)||(selNode!==null&&!SHARED.nb.get(selNode).has(d.id)&&d.id!==selNode))
+      .classed('hi', d=>selNode!==null&&(d.id===selNode||SHARED.nb.get(selNode).has(d.id)))
+      .classed('search-hit',d=>!!term&&d.label.toLowerCase().includes(term));
+    edgeSel
+      .classed('hi', d=>selNode!==null&&(d.source===selNode||d.target===selNode))
+      .classed('dim',d=>(selNode!==null&&d.source!==selNode&&d.target!==selNode)||!activeCats.has(RAW_NODES[d.source].category))
+      .style('stroke-opacity',d=>selNode!==null?null:(!activeCats.has(RAW_NODES[d.source].category)?0.015:edgeOp));
+  }
+
+  function select(id){
+    selNode=id; applyStyles();
+    const badge=document.getElementById('col-badge');
+    if(id===null){badge.classList.remove('on');return;}
+    const d=RAW_NODES[id];
+    badge.classList.add('on');
+    badge.querySelector('.b-name').textContent=d.label;
+    badge.querySelector('.b-meta').innerHTML=`scale: ${d.group}<br>category: ${catLabel(d.category)}<br>out: ${SHARED.outd.get(id)} · in: ${SHARED.ind.get(id)} · neighbours: ${SHARED.nb.get(id).size}`;
+  }
+
+  // Tooltip
+  const tt=document.getElementById('col-tt');
+  function showTT(ev,d){
+    const col=CAT_COLORS[d.category]??'#484f58';
+    tt.innerHTML=`<div class="tt-name">${d.label}</div>
+      <div class="tt-row"><span class="tt-k">scale</span><span>${d.group}</span></div>
+      <div class="tt-row"><span class="tt-k">category</span><span><span class="dot" style="background:${col}"></span>${catLabel(d.category)}</span></div>
+      <div class="tt-row"><span class="tt-k">out / in</span><span>${SHARED.outd.get(d.id)} → ${SHARED.ind.get(d.id)}</span></div>`;
+    tt.style.opacity=1; moveTT(ev);
+  }
+  function moveTT(ev){
+    const r=document.getElementById('col-canvas').getBoundingClientRect();
+    tt.style.left=Math.min(ev.clientX-r.left+14,r.width-265)+'px';
+    tt.style.top =Math.min(ev.clientY-r.top +14,r.height-130)+'px';
+  }
+  function hideTT(){tt.style.opacity=0;}
+
+  // Legend
+  const legEl=document.getElementById('col-legend');
+  const catCnt={};
+  RAW_NODES.forEach(n=>catCnt[n.category]=(catCnt[n.category]||0)+1);
+  Object.entries(catCnt).sort((a,b)=>b[1]-a[1]).forEach(([cat,cnt])=>{
+    const col=CAT_COLORS[cat]??'#484f58';
+    const item=document.createElement('div');
+    item.className='leg-item'; item.dataset.cat=cat;
+    item.innerHTML=`<div class="leg-dot" style="background:${col}"></div><span style="font-size:10.5px">${catLabel(cat)}</span><span class="leg-cnt">${cnt}</span>`;
+    item.addEventListener('click',()=>{
+      if(activeCats.has(cat))activeCats.delete(cat); else activeCats.add(cat);
+      item.classList.toggle('off',!activeCats.has(cat)); applyStyles();
+    });
+    legEl.appendChild(item);
+  });
+
+  function render(){
+    const el=document.getElementById('col-canvas');
+    const W=el.clientWidth, H=el.clientHeight;
+    computePositions(W); positionAll();
+    const totalH=COL_HEAD+PAD_TB*2+maxRows*ROW_GAP;
+    svgSel.call(zoom.transform,d3.zoomIdentity.translate(0,8).scale(Math.min((H-20)/totalH,1)));
+    applyStyles();
+  }
+
+  function mountControls(){
+    tbControls.innerHTML=`
+      <div class="ctrl-search"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="col-search" type="text" placeholder="Search nodes…" autocomplete="off"></div>
+      <div class="ctrl-slider"><span>edges</span><input id="col-edge-op" type="range" min="2" max="65" value="12"></div>`;
+    document.getElementById('col-search').addEventListener('input',e=>{
+      applyStyles();
+      const term=e.target.value.trim().toLowerCase(); if(!term)return;
+      const m=RAW_NODES.find(n=>n.label.toLowerCase().includes(term));
+      if(!m)return;
+      const p=nodePos.get(m.id);
+      const el=document.getElementById('col-canvas');
+      if(p)svgSel.transition().duration(400).call(zoom.transform,d3.zoomIdentity.translate(el.clientWidth/2-p.x*2,el.clientHeight/2-p.y*2).scale(2));
+    });
+    document.getElementById('col-edge-op').addEventListener('input',e=>{edgeOp=parseFloat(e.target.value)/100;applyStyles();});
+  }
+
+  // Init
+  render();
+  window.addEventListener('resize',()=>{if(document.getElementById('panel-col').classList.contains('active'))render();});
+  mountControls();
+
+  return { mountControls };
+})();
+
+
+// ═══════════════════════════════════════════════════════════════
+//  FORCE VIEW  (lazy-init on first tab switch)
+// ═══════════════════════════════════════════════════════════════
+const FORCE_VIEW = (() => {
+
+  const GROUP_COLORS={
+    "Child":                      "#f78166",
+    "Parent/carer":               "#56d364",
+    "Local":                      "#58a6ff",
+    "National":                   "#d2a8ff",
+    "Global":                     "#ffa657",
+    "Wider family/social networks":"#79c0ff"
+  };
+  const GROUPS=Object.keys(GROUP_COLORS);
+
+  let sim, currentLayout='force', selNode=null;
+  let activeGroups=new Set(GROUPS);
+
+  const nodes = RAW_NODES.map(d=>({...d}));
+  const edges = RAW_EDGES.map(d=>({source:d.source,target:d.target}));
+
+  function nodeR(d){return 4+Math.sqrt((SHARED.ind.get(d.id)||0)+(SHARED.outd.get(d.id)||0))*1.4;}
+
+  let svgSel,root2,edgeG2,nodeG2,ngSel2,edgeSel2,zoom2,W2,H2;
+
+  function init(){
+    svgSel=d3.select('#force-svg');
+    root2 =d3.select('#force-root');
+    edgeG2=root2.append('g');
+    nodeG2=root2.append('g');
+
+    zoom2=d3.zoom().scaleExtent([0.15,5]).on('zoom',e=>root2.attr('transform',e.transform));
+    svgSel.call(zoom2);
+    svgSel.on('dblclick.zoom',null).on('dblclick',()=>select2(null));
+
+    const el=document.getElementById('force-canvas');
+    W2=el.clientWidth; H2=el.clientHeight;
+
+    edgeSel2=edgeG2.selectAll('line.edge').data(edges).join('line').attr('class','edge')
+      .attr('stroke',d=>GROUP_COLORS[nodes[d.source].group]??'#58a6ff').attr('stroke-width',1);
+
+    ngSel2=nodeG2.selectAll('g.node-g').data(nodes).join('g').attr('class','node-g')
+      .call(d3.drag().on('start',ds).on('drag',dd).on('end',de))
+      .on('click',(e,d)=>{e.stopPropagation();select2(d.id===selNode?null:d.id);})
+      .on('mouseover',showTT2).on('mousemove',moveTT2).on('mouseout',hideTT2);
+
+    ngSel2.append('circle')
+      .attr('r',nodeR)
+      .attr('fill',d=>GROUP_COLORS[d.group]??'#888').attr('fill-opacity',0.85)
+      .attr('stroke',d=>GROUP_COLORS[d.group]??'#888').attr('stroke-opacity',0.5);
+    ngSel2.append('text').attr('class','node-label').attr('dy',d=>-nodeR(d)-3).attr('text-anchor','middle')
+      .text(d=>d.label.length>30?d.label.slice(0,28)+'…':d.label);
+
+    buildForce();
+
+    // Legend
+    const legEl=document.getElementById('force-legend');
+    const gc={};
+    nodes.forEach(n=>gc[n.group]=(gc[n.group]||0)+1);
+    GROUPS.forEach(g=>{
+      const item=document.createElement('div');
+      item.className='leg-item'; item.dataset.g=g;
+      item.innerHTML=`<div class="leg-dot" style="background:${GROUP_COLORS[g]}"></div><span style="font-size:10.5px">${g}</span><span class="leg-cnt">${gc[g]||0}</span>`;
+      item.addEventListener('click',()=>{
+        if(activeGroups.has(g))activeGroups.delete(g); else activeGroups.add(g);
+        item.classList.toggle('off',!activeGroups.has(g)); applyStyles2();
+      });
+      legEl.appendChild(item);
+    });
+
+    window.addEventListener('resize',()=>{
+      if(!document.getElementById('panel-force').classList.contains('active'))return;
+      const el=document.getElementById('force-canvas');
+      W2=el.clientWidth; H2=el.clientHeight;
+      if(sim)sim.alpha(0.2).restart();
+    });
+  }
+
+  function buildForce(){
+    if(sim)sim.stop();
+    sim=d3.forceSimulation(nodes)
+      .force('link',d3.forceLink(edges).id(d=>d.id).distance(60).strength(0.3))
+      .force('charge',d3.forceManyBody().strength(-180).distanceMax(400))
+      .force('center',d3.forceCenter(W2/2,H2/2))
+      .force('collision',d3.forceCollide().radius(d=>nodeR(d)+8))
+      .force('x',d3.forceX(W2/2).strength(0.04))
+      .force('y',d3.forceY(H2/2).strength(0.04))
+      .on('tick',ticked);
+  }
+
+  function buildRadial(){
+    if(sim)sim.stop();
+    const cx=W2/2,cy=H2/2;
+    const R0=Math.min(W2,H2)*0.10,R1=Math.min(W2,H2)*0.42;
+    const byOrd=d3.group(nodes,d=>d.order||0);
+    const maxOrd=12;
+    byOrd.forEach((arr,ord)=>{
+      const r=ord===0?R0*1.5:R0+(R1-R0)*(ord/maxOrd);
+      const base=ord===0?0:(ord/maxOrd)*Math.PI*2-Math.PI/2;
+      const spread=(Math.PI*2/maxOrd)*0.85;
+      arr.forEach((n,i)=>{
+        n.tx=cx+r*Math.cos(base+(arr.length>1?(i/(arr.length-1)-0.5)*spread:0));
+        n.ty=cy+r*Math.sin(base+(arr.length>1?(i/(arr.length-1)-0.5)*spread:0));
+      });
+    });
+    sim=d3.forceSimulation(nodes)
+      .force('link',d3.forceLink(edges).id(d=>d.id).distance(50).strength(0.05))
+      .force('charge',d3.forceManyBody().strength(-80))
+      .force('x',d3.forceX(d=>d.tx||W2/2).strength(0.6))
+      .force('y',d3.forceY(d=>d.ty||H2/2).strength(0.6))
+      .force('collision',d3.forceCollide().radius(d=>nodeR(d)+6))
+      .on('tick',ticked);
+  }
+
+  function ticked(){
+    edgeSel2.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+    ngSel2.attr('transform',d=>`translate(${d.x},${d.y})`);
+  }
+
+  function ds(e,d){if(!e.active)sim.alphaTarget(0.3).restart();d.fx=d.x;d.fy=d.y;}
+  function dd(e,d){d.fx=e.x;d.fy=e.y;}
+  function de(e,d){if(!e.active)sim.alphaTarget(0);if(currentLayout==='force'){d.fx=null;d.fy=null;}}
+
+  function applyStyles2(){
+    const term=document.getElementById('force-search')?.value.trim().toLowerCase()||'';
+    ngSel2
+      .classed('dim',d=>!activeGroups.has(d.group)||(selNode!==null&&!SHARED.nb.get(selNode).has(d.id)&&d.id!==selNode))
+      .classed('hi', d=>selNode!==null&&(d.id===selNode||SHARED.nb.get(selNode).has(d.id)))
+      .classed('search-hit',d=>!!term&&d.label.toLowerCase().includes(term));
+    edgeSel2
+      .classed('hi', d=>{const s=d.source.id??d.source,t=d.target.id??d.target;return selNode!==null&&(s===selNode||t===selNode);})
+      .classed('dim', d=>{
+        const s=d.source.id??d.source,t=d.target.id??d.target;
+        if(selNode!==null&&s!==selNode&&t!==selNode)return true;
+        return !activeGroups.has(nodes[s]?.group)||!activeGroups.has(nodes[t]?.group);
+      });
+  }
+
+  function select2(id){
+    selNode=id; applyStyles2();
+    const badge=document.getElementById('force-badge');
+    if(id===null){badge.classList.remove('on');return;}
+    const d=RAW_NODES[id];
+    badge.classList.add('on');
+    badge.querySelector('.b-name').textContent=d.label;
+    badge.querySelector('.b-meta').innerHTML=`scale: ${d.group}<br>out: ${SHARED.outd.get(id)} · in: ${SHARED.ind.get(id)} · neighbours: ${SHARED.nb.get(id).size}`;
+  }
+
+  const tt2=document.getElementById('force-tt');
+  function showTT2(ev,d){
+    const col=GROUP_COLORS[d.group]??'#888';
+    tt2.innerHTML=`<div class="tt-name">${d.label}</div>
+      <div class="tt-row"><span class="tt-k">scale</span><span><span class="dot" style="background:${col}"></span>${d.group}</span></div>
+      <div class="tt-row"><span class="tt-k">out / in</span><span>${SHARED.outd.get(d.id)} → ${SHARED.ind.get(d.id)}</span></div>`;
+    tt2.style.opacity=1; moveTT2(ev);
+  }
+  function moveTT2(ev){
+    const r=document.getElementById('force-canvas').getBoundingClientRect();
+    tt2.style.left=Math.min(ev.clientX-r.left+14,r.width-265)+'px';
+    tt2.style.top =Math.min(ev.clientY-r.top +14,r.height-130)+'px';
+  }
+  function hideTT2(){tt2.style.opacity=0;}
+
+  function mountControls(){
+    tbControls.innerHTML=`
+      <div class="ctrl-search"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="force-search" type="text" placeholder="Search nodes…" autocomplete="off"></div>
+      <div class="ctrl-layout">
+        <button class="${currentLayout==='force'?'active':''}" data-l="force">Force</button>
+        <button class="${currentLayout==='radial'?'active':''}" data-l="radial">Radial</button>
+      </div>`;
+    document.getElementById('force-search').addEventListener('input',e=>{
+      applyStyles2();
+      const term=e.target.value.trim().toLowerCase(); if(!term)return;
+      const m=nodes.find(n=>n.label.toLowerCase().includes(term));
+      if(!m||!m.x)return;
+      svgSel.transition().duration(400).call(zoom2.transform,d3.zoomIdentity.translate(W2/2-m.x*1.8,H2/2-m.y*1.8).scale(1.8));
+    });
+    document.querySelectorAll('.ctrl-layout button').forEach(b=>{
+      b.addEventListener('click',()=>{
+        currentLayout=b.dataset.l;
+        document.querySelectorAll('.ctrl-layout button').forEach(x=>x.classList.toggle('active',x===b));
+        select2(null);
+        currentLayout==='force'?buildForce():buildRadial();
+      });
+    });
+  }
+
+  return { init, mountControls };
+})();
+</script>
 </body>
 </html>
